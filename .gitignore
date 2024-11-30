@@ -1,0 +1,6 @@
+__pycache__/audio_recorder.cpython-312.pyc
+*.pyc
+*.wav
+*.mp3
+*.mp4
+*.m4a
