@@ -1,0 +1,6 @@
+comtypes
+numpy
+pywin32
+pycaw
+ffmpeg-python
+humanize
