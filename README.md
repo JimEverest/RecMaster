@@ -1,6 +1,6 @@
-# FastShot Screen Recorder
+# RecMaster Screen Recorder
 
-FastShot Screen Recorder is a high-performance screen recording tool built with Python, featuring system audio capture and multi-monitor support. It leverages Windows native APIs for optimal performance and reliability.
+RecMaster is a simple & smooth screen recording tool built with Python, featuring system audio capture and multi-monitor support. It leverages Windows native APIs for optimal performance and reliability.
 
 ## Features
 
