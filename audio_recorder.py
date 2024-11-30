@@ -409,12 +409,10 @@ class AudioRecorderManager:
             audio_client.Stop()
             print(f"停止录制设备: {filename}")
 
-    def start_recording(self, selected_outputs=None, selected_input=None, base_filename=None):
+    def start_recording(self, selected_outputs=None, selected_input=None, path_manager=None):
         """开始录制指定的设备"""
         try:
             print(f"\n[Audio] Manager start_recording called at: {time.time()}")
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            base_filename = base_filename or f"recording_{timestamp}"
             
             self.audio_clients = []
             
@@ -423,12 +421,16 @@ class AudioRecorderManager:
                     try:
                         client_info = self._initialize_audio_client(device['device'], is_input=False)
                         if client_info:
+                            filename = path_manager.get_audio_filename(
+                                is_input=False,
+                                device_name=device['name']
+                            )
                             self.audio_clients.append({
                                 'device': device['device'],
                                 'client': client_info['client'],
                                 'capture': client_info['capture'],
                                 'format': client_info['format'],
-                                'filename': f"{base_filename}_output_{device['name']}.wav",
+                                'filename': filename,
                                 'is_input': False
                             })
                     except Exception as e:
@@ -438,12 +440,13 @@ class AudioRecorderManager:
                 try:
                     client_info = self._initialize_audio_client(selected_input['device'], is_input=True)
                     if client_info:
+                        filename = path_manager.get_audio_filename(is_input=True)
                         self.audio_clients.append({
                             'device': selected_input['device'],
                             'client': client_info['client'],
                             'capture': client_info['capture'],
                             'format': client_info['format'],
-                            'filename': f"{base_filename}_input.wav",
+                            'filename': filename,
                             'is_input': True
                         })
                 except Exception as e:

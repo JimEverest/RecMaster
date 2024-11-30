@@ -12,6 +12,7 @@ import win32api
 import win32con
 from ctypes import windll, WINFUNCTYPE, POINTER, Structure, c_int, c_void_p, c_bool, byref
 from audio_recorder import AudioRecorderManager
+import getpass
 
 # 定义必要的结构和类型
 class RECT(Structure):
@@ -363,6 +364,44 @@ class ScreenRecorder:
                 except Exception as e:
                     print(f"Error destroying border window: {e}")
 
+class RecordingPathManager:
+    def __init__(self):
+        self.username = getpass.getuser()
+        self.base_dir = os.path.join("C:", os.sep, "Users", self.username, ".rec")
+        self.timestamp = None
+        
+        # 确保目录存在
+        if not os.path.exists(self.base_dir):
+            os.makedirs(self.base_dir)
+    
+    def initialize_timestamp(self):
+        """初始化时间戳，确保所有文件使用相同的时间戳"""
+        self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return self.timestamp
+    
+    def get_audio_filename(self, is_input=False, device_name=None):
+        """生成音频文件名"""
+        if is_input:
+            return os.path.join(self.base_dir, 
+                f"{self.timestamp}_audio_in.wav")
+        else:
+            # 清理设备名中的特殊字符
+            if device_name:
+                device_name = "".join(c for c in device_name if c.isalnum() or c in (' ', '-', '_'))
+                device_name = device_name.strip()
+            return os.path.join(self.base_dir, 
+                f"{self.timestamp}_audio_out_{device_name}.wav")
+    
+    def get_video_filename(self):
+        """生成视频文件名"""
+        return os.path.join(self.base_dir, 
+            f"{self.timestamp}_video.mp4")
+    
+    def get_merged_filename(self):
+        """生成合成文件名"""
+        return os.path.join(self.base_dir, 
+            f"{self.timestamp}_merge.mp4")
+
 class RecorderUI:
     def __init__(self):
         self.window = tk.Tk()
@@ -382,6 +421,8 @@ class RecorderUI:
         self.audio_manager = AudioRecorderManager()
         self.selected_output_devices = []
         self.selected_input_device = None
+        
+        self.path_manager = RecordingPathManager()
         
         self.setup_ui()
         
@@ -427,7 +468,7 @@ class RecorderUI:
         status_frame = ttk.LabelFrame(self.window, text="录制状态", padding=10)
         status_frame.pack(fill="x", padx=10, pady=5)
         
-        # 使用网格局来��标
+        # 使用网格局来标
         self.status_labels = {}
         status_items = [
             ("time", "录制时间: 00:00:00"),
@@ -496,10 +537,13 @@ class RecorderUI:
         except Exception as e:
             print(f"[Audio] Error refreshing devices: {str(e)}")
             traceback.print_exc()
-            messagebox.showerror("错误", f"刷新音频设备失败: {str(e)}")
+            messagebox.showerror("错误", f"刷音频设备失败: {str(e)}")
     
     def start_recording(self):
         try:
+            # 初始化时间戳
+            self.path_manager.initialize_timestamp()
+            
             # 初始化录屏器
             self.recorder = ScreenRecorder(quality=self.quality_var.get())
             
@@ -517,9 +561,7 @@ class RecorderUI:
                         break
             
             # 准备录制文件名
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            base_filename = f"recording_{timestamp}"
-            video_filename = f"{base_filename}.mp4"
+            video_filename = self.path_manager.get_video_filename()
             self.current_video_file = video_filename  # 移到这里
             self.current_audio_files = []  # 初始化为空列表
             
@@ -551,7 +593,7 @@ class RecorderUI:
             # 设置窗口位置和大小，确保覆盖所有显示器
             select_window.geometry(f"{total_width}x{total_height}+{min_x}+{min_y}")
             
-            # 移除窗口的标题��和边框
+            # 移除窗口的标题和边框
             select_window.overrideredirect(True)
             
             canvas = tk.Canvas(select_window, cursor="cross", highlightthickness=0)
@@ -618,7 +660,7 @@ class RecorderUI:
                                 audio_files = self.audio_manager.start_recording(
                                     selected_outputs=selected_outputs,
                                     selected_input=selected_input,
-                                    base_filename=base_filename
+                                    path_manager=self.path_manager  # 传递path_manager
                                 )
                                 if audio_files:
                                     self.current_audio_files = audio_files
@@ -729,30 +771,10 @@ class RecorderUI:
         """合并音频和视频文件"""
         try:
             video_file = self.recorder.output_file
-            if not os.path.exists(video_file):
-                raise Exception(f"找不到视频文件: {video_file}")
-            
-            # 检查视频文件大小
-            video_size = os.path.getsize(video_file)
-            if video_size == 0:
-                raise Exception(f"视频文件大小为0: {video_file}")
-            
-            print(f"视频文件大小: {video_size} bytes")
-            
-            # 检查音频文件
-            for audio_file in self.current_audio_files:
-                if not os.path.exists(audio_file):
-                    raise Exception(f"找不到音频文件: {audio_file}")
-                audio_size = os.path.getsize(audio_file)
-                print(f"音频文件大小: {audio_size} bytes - {audio_file}")
-                if audio_size == 0:
-                    raise Exception(f"音频文件大小为0: {audio_file}")
-            
-            # 准备输出文件名
-            merge_filename = video_file.replace('.mp4', '_with_audio.mp4')
+            merged_file = self.path_manager.get_merged_filename()
             
             # 构建 FFmpeg 命令
-            cmd = ['ffmpeg', '-y']  # 添加 -y 参数覆盖已存在的文件
+            cmd = ['ffmpeg', '-y']  # -y 覆盖已存在的文件
             
             # 添加视频输入
             cmd.extend(['-i', video_file])
@@ -774,24 +796,27 @@ class RecorderUI:
                     '-map', '[aout]'
                 ])
             
+            # 添加输出参数
             cmd.extend([
                 '-c:v', 'copy',
                 '-c:a', 'aac',
                 '-b:a', '192k',
-                merge_filename
+                merged_file
             ])
             
             print("执行FFmpeg命令:", ' '.join(cmd))
             
             # 执行合并命令
-            result = subprocess.run(cmd, 
-                                  check=True, 
-                                  capture_output=True, 
-                                  text=True)
+            result = subprocess.run(
+                cmd,
+                check=True,
+                capture_output=True,
+                text=True
+            )
             
             if result.returncode == 0:
-                print(f"音视频合并成功: {merge_filename}")
-                messagebox.showinfo("完成", f"录制已完成并保存为: {merge_filename}")
+                print(f"音视频合并成功: {merged_file}")
+                self.show_completion_dialog(merged_file)
             else:
                 raise Exception(f"FFmpeg 返回错误: {result.stderr}")
             
@@ -861,6 +886,63 @@ class RecorderUI:
 
     def run(self):
         self.window.mainloop()
+
+    def show_completion_dialog(self, filepath):
+        """显示录制完成对话框"""
+        dialog = tk.Toplevel(self.window)
+        dialog.title("完成")
+        dialog.geometry("500x150")
+        dialog.resizable(False, False)
+        
+        # 文件路径标签
+        path_label = ttk.Label(dialog, 
+            text=f"录制已完成并保存为:\n{filepath}", 
+            wraplength=450)
+        path_label.pack(pady=10)
+        
+        def copy_path():
+            """复制路径到剪贴板"""
+            dialog.clipboard_clear()
+            dialog.clipboard_append(filepath)
+            dialog.update()
+            messagebox.showinfo("提示", "路径已复制到剪贴板")
+        
+        # 按钮框架
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(pady=10)
+        
+        # 复制按钮
+        copy_btn = ttk.Button(button_frame, 
+            text="复制路径", 
+            command=copy_path)
+        copy_btn.pack(side="left", padx=5)
+        
+        # 确定按钮
+        ok_btn = ttk.Button(button_frame, 
+            text="确定", 
+            command=dialog.destroy)
+        ok_btn.pack(side="left", padx=5)
+        
+        # 使对话框居中
+        dialog.transient(self.window)
+        dialog.grab_set()
+        
+        # 计算居中位置
+        window_x = self.window.winfo_x()
+        window_y = self.window.winfo_y()
+        window_width = self.window.winfo_width()
+        window_height = self.window.winfo_height()
+        
+        dialog_width = 500
+        dialog_height = 150
+        
+        x = window_x + (window_width - dialog_width) // 2
+        y = window_y + (window_height - dialog_height) // 2
+        
+        dialog.geometry(f"+{x}+{y}")
+        
+        # 等待对话框关闭
+        self.window.wait_window(dialog)
 
 if __name__ == '__main__':
     ui = RecorderUI()
