@@ -4,14 +4,14 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="RecMaster",  # PyPI上的包名
-    version="0.1.0",  # 版本号
-    author="JimEverest",  # 作者名
-    author_email="tianwai263@gmail.com",  # 作者邮箱
+    name="RecMaster",
+    version="0.1.1",
+    author="JimEverest",
+    author_email="tianwai263@gmail.com",
     description="A simple and efficient screen recorder with audio support",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/JimEverest/RecMaster",  # GitHub仓库地址
+    url="https://github.com/JimEverest/RecMaster",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",
@@ -31,4 +31,9 @@ setup(
         "ffmpeg-python",
         "humanize",
     ],
+    entry_points={
+        'console_scripts': [
+            'recmaster=RecMaster:main',
+        ],
+    },
 ) 
