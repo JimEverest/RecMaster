@@ -11,6 +11,14 @@ RecMaster is a simple & smooth screen recording tool built with Python, featurin
 - **Real-time Preview**: Live recording border and status display
 - **Flexible Output**: MP4 video format with AAC audio encoding
 
+
+## 安装
+
+```bash
+pip install RecMaster
+```
+
+
 ## Technical Architecture
 
 ### Core Components
