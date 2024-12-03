@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="RecMaster",
-    version="0.1.1",
+    version="0.1.2",
     author="JimEverest",
     author_email="tianwai263@gmail.com",
     description="A simple and efficient screen recorder with audio support",

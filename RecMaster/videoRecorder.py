@@ -11,7 +11,7 @@ import win32gui
 import win32api
 import win32con
 from ctypes import windll, WINFUNCTYPE, POINTER, Structure, c_int, c_void_p, c_bool, byref
-from audio_recorder import AudioRecorderManager
+from .audio_recorder import AudioRecorderManager
 import getpass
 
 # 定义必要的结构和类型
@@ -405,9 +405,9 @@ class RecordingPathManager:
 class RecorderUI:
     def __init__(self):
         self.window = tk.Tk()
-        self.window.title("FastShot Recorder")
+        self.window.title("RecMaster")
         self.window.geometry("400x600")
-        self.window.resizable(False, False)
+        self.window.resizable(True, True)
         
         # 获取屏幕信息
         self.monitors = ScreenInfo.get_real_resolution()
@@ -424,6 +424,7 @@ class RecorderUI:
         
         self.path_manager = RecordingPathManager()
         
+        self.selected_indices = set()  # 添加这行来跟踪选中的索引
         self.setup_ui()
         
     def setup_ui(self):
@@ -451,10 +452,16 @@ class RecorderUI:
         self.output_listbox = tk.Listbox(audio_frame, selectmode=tk.MULTIPLE, height=4)
         self.output_listbox.pack(fill="x", pady=2)
         
+        # 添加选择事件绑定
+        self.output_listbox.bind('<<ListboxSelect>>', self.on_output_select)
+        
         # 输入设备下拉框
         ttk.Label(audio_frame, text="输入设备:").pack(anchor="w")
         self.input_combo = ttk.Combobox(audio_frame, state="readonly")
         self.input_combo.pack(fill="x", pady=2)
+        
+        # 绑定输入设备选择事件
+        self.input_combo.bind('<<ComboboxSelected>>', self.on_input_select)
         
         # 刷新音频设备按钮
         refresh_audio_btn = ttk.Button(audio_frame, text="刷新音频设备",
@@ -500,10 +507,26 @@ class RecorderUI:
                                       maximum=100)
         self.progress.pack(fill="x", padx=10, pady=5)
 
+    def on_output_select(self, event):
+        """处理输出设备选择变化"""
+        current_selection = set(self.output_listbox.curselection())
+        self.selected_indices = current_selection
+
+    def on_input_select(self, event):
+        """处理输入设备选择变化"""
+        # 恢复之前的输出设备选择
+        self.output_listbox.selection_clear(0, tk.END)
+        for index in self.selected_indices:
+            self.output_listbox.selection_set(index)
+
     def refresh_audio_devices(self):
         """刷新音频设备列表"""
         try:
             print("\n[Audio] Refreshing audio devices...")
+            # 保存当前选择的设备名称
+            selected_outputs = [self.output_listbox.get(i) for i in self.output_listbox.curselection()]
+            current_input = self.input_combo.get()
+            
             # 清空现有列表
             self.output_listbox.delete(0, tk.END)
             self.input_combo.set('')
@@ -519,25 +542,31 @@ class RecorderUI:
             for i, device in enumerate(output_devices):
                 print(f"[Audio] Output device: {device['name']} {'(Default)' if device.get('is_default') else ''}")
                 self.output_listbox.insert(tk.END, device['name'])
-                if device.get('is_default'):
+                # 恢复之前的选择
+                if device['name'] in selected_outputs:
+                    self.output_listbox.selection_set(i)
+                    self.selected_indices.add(i)
+                if device.get('is_default') and not selected_outputs:
                     default_index = i
             
-            # 选中默认设备
-            if default_index is not None:
+            # 如果没有之前的选择，选中默认设备
+            if default_index is not None and not selected_outputs:
                 self.output_listbox.selection_set(default_index)
-                print(f"[Audio] Selected default output device at index {default_index}")
+                self.selected_indices.add(default_index)
             
             # 添加输入设备
             self.input_devices = input_devices
             self.input_combo['values'] = [''] + [dev['name'] for dev in input_devices]
-            for device in input_devices:
-                print(f"[Audio] Input device: {device['name']}")
-            self.input_combo.set('')  # 设置为空选项
+            # 恢复之前的输入设备选择
+            if current_input in self.input_combo['values']:
+                self.input_combo.set(current_input)
+            else:
+                self.input_combo.set('')
             
         except Exception as e:
             print(f"[Audio] Error refreshing devices: {str(e)}")
             traceback.print_exc()
-            messagebox.showerror("错误", f"刷音频设备失败: {str(e)}")
+            messagebox.showerror("错误", f"刷新音频设备失败: {str(e)}")
     
     def start_recording(self):
         try:
